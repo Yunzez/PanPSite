@@ -42,3 +42,6 @@ next-env.d.ts
 
 # copied from node_modules by scripts/copy-mediapipe.mjs
 /public/mediapipe/wasm/
+
+# local speech synthesis tool (see tools/tts)
+/tools/tts/node_modules/

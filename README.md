@@ -44,7 +44,21 @@ npm run dev
 
 给研究者的材料准备说明（要交哪些文件、怎么命名、填写模板、待确认的问题）：<https://claude.ai/artifact/Hor8vRK7T1cf5pxKXHDDA5>
 
-目前只有一份 `demo` 材料，音频是机器合成的、图片是色块、逐词时间戳是按词长估算的，都只是占位，不是研究材料。`/spike` 页上的音频和滤镜图形同样是占位。
+目前只有一份 `demo` 材料，音频是语音合成的、图片是色块、逐词时间戳是按词长估算的，都只是占位，不是研究材料。`/spike` 页上的音频和滤镜图形同样是占位。
+
+### 重新生成 demo 音频
+
+demo 的声音由 [tools/tts](tools/tts) 里的脚本生成，用的是在本机运行的开源语音模型 Kokoro，两个角色各用一个声音。这个工具有自己的依赖，体积很大，和网页应用分开安装，部署时不会用到。
+
+```bash
+npm --prefix tools/tts install
+```
+
+```bash
+npm --prefix tools/tts run generate
+```
+
+第一次运行会从 Hugging Face 下载约 90MB 的模型。换声音、调语速、改分块的读法都在 [tools/tts/generate-demo-audio.mjs](tools/tts/generate-demo-audio.mjs) 开头的几个常量里。脚本会把所有片段调到同一响度，并把材料版本号加一。
 
 ## 目录
 

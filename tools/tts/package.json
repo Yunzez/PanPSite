@@ -1,0 +1,12 @@
+{
+  "name": "read-and-act-tts",
+  "private": true,
+  "type": "module",
+  "description": "Generates the placeholder audio of the demo material with a local neural voice. Not part of the web app.",
+  "scripts": {
+    "generate": "node generate-demo-audio.mjs"
+  },
+  "dependencies": {
+    "kokoro-js": "^1.2.1"
+  }
+}
