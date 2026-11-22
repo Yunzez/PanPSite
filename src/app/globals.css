@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+/*
+ * Token values live in src/theme/theme.ts and are injected on <html> by the
+ * root layout as --theme-* variables. This block only gives them Tailwind
+ * utility names; it holds no values of its own.
+ */
+@theme inline {
+  --color-primary: var(--theme-color-primary);
+  --color-primary-dark: var(--theme-color-primary-dark);
+  --color-on-primary: var(--theme-color-on-primary);
+  --color-secondary: var(--theme-color-secondary);
+  --color-secondary-dark: var(--theme-color-secondary-dark);
+  --color-on-secondary: var(--theme-color-on-secondary);
+  --color-accent: var(--theme-color-accent);
+  --color-record: var(--theme-color-record);
+  --color-record-dark: var(--theme-color-record-dark);
+  --color-on-record: var(--theme-color-on-record);
+  --color-highlight: var(--theme-color-highlight);
+  --color-background: var(--theme-color-background);
+  --color-surface: var(--theme-color-surface);
+  --color-line: var(--theme-color-line);
+  --color-ink: var(--theme-color-ink);
+  --color-ink-muted: var(--theme-color-ink-muted);
+
+  --radius-sm: var(--theme-radius-sm);
+  --radius-md: var(--theme-radius-md);
+  --radius-lg: var(--theme-radius-lg);
+
+  --spacing-touch: var(--theme-size-touch);
+  --spacing-main-button: var(--theme-size-main-button);
+
+  --font-sans:
+    var(--font-andika), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    sans-serif;
+}
+
+body {
+  background: var(--theme-color-background);
+  color: var(--theme-color-ink);
+  /* No rubber-band scrolling or pull-to-refresh while a child is using the app. */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
