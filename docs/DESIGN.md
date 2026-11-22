@@ -2,7 +2,7 @@
 
 - 需求来源：[Read and Act: App Design and Training Protocol](https://docs.google.com/document/d/1E5ZqGVcoUTjTp1DgBZCEboNz70He_CuX0GANIp1AMLg)（下文的“需求 §N”指其 App Development 页的章节）
 - 状态：初稿，2026-11-21。标了【假设】的地方是我先替研究者做的默认选择，对应第 14 节的待确认问题。
-- 进度（2026-11-21）：M0 验证页、M1、M2（Mode A 全流程和导出）已实现。尚未实现：Mode B（`/b`）、研究者的 session 内面板、中断后恢复、设置页的麦克风自检。
+- 进度（2026-11-21）：M0 验证页、M1、M2（Mode A 全流程和导出）、M3（Mode B）已实现。尚未实现：研究者的 session 内面板、中断后恢复、设置页的麦克风自检；滤镜在真人脸上的效果和 Safari 还没有实测。
 
 ## 1. 产品一句话
 
@@ -72,6 +72,10 @@ setup（研究者） → handover（"Let's read!" + Start） → 6 个活动 →
 - 【假设】`quiz` 作答后不显示对错。
 - 【假设】`words` 里只有一个 Listen again 按钮，重播当前词的整段示范；需求里的 Play Model 和 Listen Again 合并成了这一个。示范完整播过一遍后才能点 Next。
 - 【假设】Mode A 不显示角色名；`perform` 朗读全部台词。
+- 【假设】`listen` 在两个模式下完全相同：纯文本，不显示角色名，不开摄像头（需求写的是两个模式用同样的示范内容）。
+- 【假设】Mode B 的 `perform` 每轮先选角色：点角色时舞台上预览对应滤镜，点 Next 才确认；只列出有台词的角色。Listen carefully 播放自己当前这一句的示范。
+
+Mode B 的摄像头从设置页开到 `perform` 结束，之后的理解题和问卷不再占用摄像头。设置页的就绪面板里有一个带滤镜的预览，供研究者确认摄像头正常。目前麦克风和摄像头是两次授权提示。
 
 实现方式：活动由 session 流程启动和结束（每个活动导出一个 `enter` / `leave` 控制器），不依赖组件挂载，所以声音和录音在每个活动里只会启动一次。`rehearse` 和 `perform` 共用一个朗读循环，区别只在“步骤计划”（每一步是学生读还是同伴读）和是否先播示范；Mode B 的角色扮演只需要换一份计划。`quiz` 和 `feedback` 共用一个“一屏一题”的状态机。
 
@@ -94,7 +98,10 @@ type Material = {
 type Character = {
   id: string;
   name: string;                               // 仅 B 显示
-  filter: { ears: string; nose: string };     // PNG，仅 B 使用
+  // 仅 B 使用；B 模式下每个有台词的角色都必须有。
+  // 目前只有 "shapes"（纯色椭圆的占位画法：耳朵位置、颜色、相对两眼间距的大小）；
+  // 拿到正式美术后在旁边加 "sprites"（PNG 贴图），用同一组锚点。
+  filter?: { type: "shapes"; earAnchor: "top" | "side"; /* 颜色和尺寸 */ };
 };
 
 type WordItem = {

@@ -12,9 +12,16 @@ import {
 } from "@/content/loader";
 import type { Manifest, Material } from "@/content/schema";
 import type { Mode } from "@/data/db";
+import { CharacterStage } from "./CharacterStage";
 import { defaultSessionConfig } from "./config";
-import { audio, prepareRecorder } from "./engines";
+import { audio, prepareCamera, prepareRecorder } from "./engines";
 import { useSessionStore } from "./sessionStore";
+
+/** Characters that speak in the script, in order of first appearance. */
+function speakingCharacters(material: Material) {
+  const ids = [...new Set(material.lines.map((line) => line.characterId))];
+  return ids.map((id) => material.characters.find((character) => character.id === id)!);
+}
 
 const modeNames: Record<Mode, string> = {
   A: "Mode A · Repeated Reading",
@@ -72,6 +79,14 @@ export function SetupScreen({ mode }: { mode: Mode }) {
       setLoad({ step: "loading", message: "Loading material…" });
       await unlocked;
       const material = await loadMaterial(materialId);
+      if (mode === "B") {
+        const missing = speakingCharacters(material).find((character) => !character.filter);
+        if (missing) {
+          throw new Error(
+            `This material has no filter for "${missing.name}". Mode B needs one for every character that speaks.`,
+          );
+        }
+      }
       const clips = materialAudioUrls(material);
       await audio.preload(clips, (done, total) =>
         setLoad({ step: "loading", message: `Loading audio ${done} / ${total}…` }),
@@ -83,6 +98,17 @@ export function SetupScreen({ mode }: { mode: Mode }) {
         message: "Waiting for microphone permission. Choose Allow in the browser prompt.",
       });
       await prepareRecorder(config);
+      if (mode === "B") {
+        await prepareCamera((step) =>
+          setLoad({
+            step: "loading",
+            message:
+              step === "camera"
+                ? "Waiting for camera permission. Choose Allow in the browser prompt."
+                : "Loading face tracking…",
+          }),
+        );
+      }
       setLoad({ step: "ready", material });
     } catch (error) {
       setLoad({ step: "failed", message: error instanceof Error ? error.message : String(error) });
@@ -184,6 +210,20 @@ export function SetupScreen({ mode }: { mode: Mode }) {
           <p role="status" className="rounded-md bg-highlight px-4 py-3 font-bold">
             Ready: {studentId} · {load.material.title} · {rounds} round{rounds === 1 ? "" : "s"}
           </p>
+          {mode === "B" && (
+            <>
+              <CharacterStage
+                className="h-56"
+                filter={speakingCharacters(load.material)[0]?.filter ?? null}
+                sceneUrl={load.material.scene?.image}
+                label={speakingCharacters(load.material)[0]?.name}
+              />
+              <p className="text-ink-muted">
+                Camera check: the ears and nose should follow your face. The picture stays on this
+                device and is not recorded.
+              </p>
+            </>
+          )}
           <div className="flex gap-3">
             <Button
               variant="secondary"

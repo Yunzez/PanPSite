@@ -29,11 +29,12 @@ npm run dev
 
 | 路径 | 用途 |
 |---|---|
-| `/a` | Mode A（Repeated Reading）的 session：研究者设置 → 学生完成六个活动 → 保存 |
+| `/a` | Mode A（Repeated Reading）的 session：研究者设置 → 学生完成六个活动 → 保存。纯文本，没有角色、滤镜和场景 |
+| `/b` | Mode B（Read and Act）的 session：流程相同，跟读和朗读时多了场景、摄像头预览和角色滤镜，朗读前选一个角色，App 读其他角色的台词 |
 | `/researcher` | 研究者页面：本机的 session 列表和 ZIP 导出。需要 PIN，默认值见 `src/features/researcher/pin.ts`，可用环境变量 `NEXT_PUBLIC_RESEARCHER_PIN` 修改 |
 | `/spike` | M0 技术验证：摄像头滤镜、顺序播放、录音、本地保存和回放，用来在目标浏览器上确认行为、比较两种麦克风策略 |
 
-Mode B（`/b`）还没有实现。
+模式由链接决定，学生无法切换。
 
 ## 内容
 

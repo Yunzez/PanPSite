@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/Button";
 import { tokenize } from "@/content/schema";
 import { ActivityFrame } from "@/features/session/ActivityFrame";
-import { useSessionStore } from "@/features/session/sessionStore";
 import { useListenStore } from "./listenStore";
 
 export function ListenActivity() {
@@ -13,8 +12,6 @@ export function ListenActivity() {
   const wordIndex = useListenStore((state) => state.wordIndex);
   const canGoOn = useListenStore((state) => state.heardOnce || state.canSkip);
   const { toggle, listenAgain, next } = useListenStore.getState();
-  const mode = useSessionStore((state) => state.session?.mode);
-  const characters = useSessionStore((state) => state.material?.characters);
 
   return (
     <ActivityFrame
@@ -46,13 +43,9 @@ export function ListenActivity() {
         {lines.map((line, index) => {
           const speaking = index === lineIndex;
           return (
+            // The same plain text in both modes: this step uses identical
+            // content in A and B, so no speaker names here.
             <p key={line.id} className="text-3xl leading-relaxed">
-              {/* Mode A is plain text: speaker names appear in Mode B only. */}
-              {mode === "B" && (
-                <span className="mr-3 text-xl font-bold text-primary-dark">
-                  {characters?.find((character) => character.id === line.characterId)?.name}
-                </span>
-              )}
               {tokenize(line.text).map((word, position) => {
                 // Without word timings the whole line is highlighted instead.
                 const lit = speaking && (line.words ? position === wordIndex : true);

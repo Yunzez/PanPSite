@@ -1,25 +1,7 @@
 import type { FaceLandmarker, NormalizedLandmark } from "@mediapipe/tasks-vision";
+import { layoutFilter, type FacePoints, type FilterStyle } from "./filterLayout";
 
-/**
- * How one character's ears and nose are drawn. Sizes are multiples of the
- * distance between the eyes, so the overlay scales with the face.
- *
- * These are flat placeholder shapes. The real character art will be PNG
- * sprites placed with the same anchor points.
- */
-export type FilterStyle = {
-  /** `top`: ears sit above the forehead. `side`: ears sit beside the head. */
-  earAnchor: "top" | "side";
-  earColor: string;
-  earInnerColor: string;
-  earRadiusX: number;
-  earRadiusY: number;
-  noseColor: string;
-  noseRadiusX: number;
-  noseRadiusY: number;
-  /** Colour of the two nostril dots; omit for a plain nose. */
-  nostrilColor?: string;
-};
+export type { FilterStyle } from "./filterLayout";
 
 // Both are served from our own origin (see scripts/copy-mediapipe.mjs).
 const WASM_PATH = "/mediapipe/wasm";
@@ -27,7 +9,7 @@ const MODEL_PATH = "/mediapipe/face_landmarker.task";
 
 // Indices into MediaPipe's 478-point face mesh. "A" is on the left of the
 // (unmirrored) camera image, "B" on the right.
-const LANDMARK = {
+const LANDMARK: Record<keyof FacePoints, number> = {
   noseTip: 1,
   forehead: 10,
   chin: 152,
@@ -35,9 +17,26 @@ const LANDMARK = {
   eyeOuterB: 263,
   faceEdgeA: 234,
   faceEdgeB: 454,
-} as const;
+};
 
-type Point = { x: number; y: number };
+let consoleFiltered = false;
+
+/**
+ * MediaPipe writes informational start-up lines ("INFO: Created TensorFlow
+ * Lite XNNPACK delegate for CPU.") through console.error. Development tools
+ * then report an error that is not one, on top of the student's controls.
+ * This passes exactly those lines on as info and leaves every other error
+ * untouched.
+ */
+function quietMediaPipeInfo(): void {
+  if (consoleFiltered) return;
+  consoleFiltered = true;
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    if (typeof args[0] === "string" && args[0].startsWith("INFO:")) console.info(...args);
+    else original(...args);
+  };
+}
 
 /**
  * Tracks one face in a video element and draws ears and a nose over it on a
@@ -53,6 +52,7 @@ export class FaceFilter {
   private constructor(private readonly landmarker: FaceLandmarker) {}
 
   static async create(): Promise<FaceFilter> {
+    quietMediaPipeInfo();
     // Loaded on demand so Mode A never downloads the face-tracking code.
     const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
     const fileset = await FilesetResolver.forVisionTasks(WASM_PATH);
@@ -131,67 +131,23 @@ export class FaceFilter {
 
 function drawFilter(
   context: CanvasRenderingContext2D,
-  face: NormalizedLandmark[],
+  landmarks: NormalizedLandmark[],
   width: number,
   height: number,
   style: FilterStyle,
 ): void {
-  const point = (index: number): Point => ({ x: face[index].x * width, y: face[index].y * height });
-  const eyeA = point(LANDMARK.eyeOuterA);
-  const eyeB = point(LANDMARK.eyeOuterB);
-  const forehead = point(LANDMARK.forehead);
-  const chin = point(LANDMARK.chin);
+  // Landmarks come normalised to 0..1; the layout works in canvas pixels.
+  const face = Object.fromEntries(
+    Object.entries(LANDMARK).map(([name, index]) => [
+      name,
+      { x: landmarks[index].x * width, y: landmarks[index].y * height },
+    ]),
+  ) as FacePoints;
 
-  const eyeDistance = Math.hypot(eyeB.x - eyeA.x, eyeB.y - eyeA.y);
-  const faceHeight = Math.hypot(forehead.x - chin.x, forehead.y - chin.y);
-  if (eyeDistance < 1 || faceHeight < 1) return;
-
-  // The face's own axes, so the overlay follows a tilted head:
-  // `right` runs along the eye line, `up` from chin to forehead.
-  const right: Point = { x: (eyeB.x - eyeA.x) / eyeDistance, y: (eyeB.y - eyeA.y) / eyeDistance };
-  const up: Point = { x: (forehead.x - chin.x) / faceHeight, y: (forehead.y - chin.y) / faceHeight };
-  const roll = Math.atan2(right.y, right.x);
-
-  /** A point offset from `origin` along the face's axes, in eye-distance units. */
-  const offset = (origin: Point, alongRight: number, alongUp: number): Point => ({
-    x: origin.x + (right.x * alongRight + up.x * alongUp) * eyeDistance,
-    y: origin.y + (right.y * alongRight + up.y * alongUp) * eyeDistance,
-  });
-
-  const ellipse = (center: Point, radiusX: number, radiusY: number, rotation: number, color: string) => {
+  for (const shape of layoutFilter(face, style)) {
     context.beginPath();
-    context.ellipse(center.x, center.y, radiusX * eyeDistance, radiusY * eyeDistance, rotation, 0, Math.PI * 2);
-    context.fillStyle = color;
+    context.ellipse(shape.center.x, shape.center.y, shape.radiusX, shape.radiusY, shape.rotation, 0, Math.PI * 2);
+    context.fillStyle = shape.color;
     context.fill();
-  };
-
-  const ears: { center: Point; tilt: number }[] =
-    style.earAnchor === "top"
-      ? [
-          { center: offset(forehead, -0.72, 0.42), tilt: -0.35 },
-          { center: offset(forehead, 0.72, 0.42), tilt: 0.35 },
-        ]
-      : [
-          { center: offset(point(LANDMARK.faceEdgeA), -0.22, 0.3), tilt: 0 },
-          { center: offset(point(LANDMARK.faceEdgeB), 0.22, 0.3), tilt: 0 },
-        ];
-  for (const ear of ears) {
-    ellipse(ear.center, style.earRadiusX, style.earRadiusY, roll + ear.tilt, style.earColor);
-    ellipse(ear.center, style.earRadiusX * 0.58, style.earRadiusY * 0.58, roll + ear.tilt, style.earInnerColor);
-  }
-
-  const nose = point(LANDMARK.noseTip);
-  ellipse(nose, style.noseRadiusX, style.noseRadiusY, roll, style.noseColor);
-  if (style.nostrilColor) {
-    const spread = style.noseRadiusX * 0.42;
-    for (const side of [-1, 1]) {
-      ellipse(
-        offset(nose, side * spread, 0),
-        style.noseRadiusX * 0.18,
-        style.noseRadiusY * 0.34,
-        roll,
-        style.nostrilColor,
-      );
-    }
   }
 }

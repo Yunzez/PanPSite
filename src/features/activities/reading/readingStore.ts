@@ -3,7 +3,7 @@ import type { Line } from "@/content/schema";
 import type { Mode } from "@/data/db";
 import { getTakeBlob, saveTake } from "@/data/recordings";
 import type { ActivityContext, ActivityController } from "@/features/session/activity";
-import { audio, getRecorder } from "@/features/session/engines";
+import { audio, getRecorder, releaseCamera } from "@/features/session/engines";
 import type { Take } from "@/media/recorder";
 
 /**
@@ -12,8 +12,11 @@ import type { Take } from "@/media/recorder";
  * - `rehearse` (Listen and Read, requirements §5): for every line, the model
  *   plays, stops, and the student records it.
  * - `perform` (Read Again / Read and Act, §6): the student reads their lines
- *   without the model, for a configurable number of rounds. In Mode B the app
- *   will read the other characters' lines ("partner" steps).
+ *   without the model, for a configurable number of rounds. In Mode A they
+ *   read every line. In Mode B each round starts with choosing a character
+ *   ("roleSelect"); the student then reads that character's lines and the app
+ *   plays the other characters' recordings ("partner" steps). The role stays
+ *   fixed for the round.
  *
  * One line, for the student:
  *
@@ -28,6 +31,7 @@ export type ReadingActivity = "rehearse" | "perform";
 
 export type ReadingPhase =
   | "idle"
+  | "roleSelect"
   | "modelPlaying"
   | "partnerPlaying"
   | "ready"
@@ -54,10 +58,18 @@ type ReadingState = {
   round: number;
   stepIndex: number;
   phase: ReadingPhase;
+  /** Characters the student may play: those that have at least one line. */
+  roleOptions: string[];
+  /** Tapped on the role screen but not confirmed yet. */
+  pendingRole: string | null;
+  /** The character the student plays this round (Mode B "Read and Act" only). */
+  role: string | null;
   /** Most recent take of this activity, for "Hear my reading". */
   lastTakeId: string | null;
   error: string | null;
 
+  chooseRole: (characterId: string) => void;
+  confirmRole: () => void;
   record: () => Promise<void>;
   done: () => Promise<void>;
   retrySave: () => Promise<void>;
@@ -89,8 +101,32 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
   round: 1,
   stepIndex: 0,
   phase: "idle",
+  roleOptions: [],
+  pendingRole: null,
+  role: null,
   lastTakeId: null,
   error: null,
+
+  chooseRole: (characterId) => {
+    if (get().phase !== "roleSelect" || !get().roleOptions.includes(characterId)) return;
+    set({ pendingRole: characterId });
+  },
+
+  confirmRole: () => {
+    const { phase, pendingRole, lines, round } = get();
+    if (phase !== "roleSelect" || !pendingRole || !context) return;
+    set({
+      role: pendingRole,
+      // The student reads the chosen character's lines; the app reads the rest.
+      steps: lines.map((line, lineIndex) => ({
+        lineIndex,
+        kind: line.characterId === pendingRole ? ("student" as const) : ("partner" as const),
+      })),
+      stepIndex: 0,
+    });
+    context.log("role_selected", { round, characterId: pendingRole });
+    void beginStep();
+  },
 
   record: async () => {
     const activity = context;
@@ -187,7 +223,12 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
   nextRound: () => {
     if (get().phase !== "roundDone") return;
     set({ round: get().round + 1, stepIndex: 0 });
-    void beginStep();
+    if (choosesRole(get())) {
+      // A new round begins with a new choice; picking the same character is fine.
+      set({ phase: "roleSelect", role: null, pendingRole: null, steps: [] });
+    } else {
+      void beginStep();
+    }
   },
 
   finish: () => {
@@ -198,6 +239,11 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
 function currentLine(): Line {
   const { lines, steps, stepIndex } = useReadingStore.getState();
   return lines[steps[stepIndex].lineIndex];
+}
+
+/** Role choice exists only in Mode B's "Read and Act". */
+function choosesRole(state: Pick<ReadingState, "activity" | "mode">): boolean {
+  return state.activity === "perform" && state.mode === "B";
 }
 
 /** Starts whatever the current step calls for. */
@@ -308,22 +354,28 @@ function enter(activityContext: ActivityContext, activity: ReadingActivity): voi
   pendingTake = null;
   returnPhase = null;
   const { material, config, mode } = activityContext;
+  const withRole = choosesRole({ activity, mode });
   useReadingStore.setState({
     activity,
     mode,
     lines: material.lines,
-    // Every line is read by the student. Mode B's "Read and Act" will replace
-    // this plan with the chosen role's lines plus partner steps.
-    steps: material.lines.map((_, lineIndex) => ({ lineIndex, kind: "student" as const })),
+    // By default the student reads every line. With a role, the plan is built
+    // when the role is confirmed.
+    steps: withRole ? [] : material.lines.map((_, lineIndex) => ({ lineIndex, kind: "student" as const })),
     modelFirst: activity === "rehearse",
     rounds: activity === "rehearse" ? 1 : config.performRounds,
     round: 1,
     stepIndex: 0,
-    phase: "idle",
+    phase: withRole ? "roleSelect" : "idle",
+    roleOptions: material.characters
+      .map((character) => character.id)
+      .filter((characterId) => material.lines.some((line) => line.characterId === characterId)),
+    pendingRole: null,
+    role: null,
     lastTakeId: null,
     error: null,
   });
-  void beginStep();
+  if (!withRole) void beginStep();
 }
 
 function leave(): void {
@@ -348,5 +400,9 @@ export const rehearseController: ActivityController = {
 
 export const performController: ActivityController = {
   enter: (activityContext) => enter(activityContext, "perform"),
-  leave,
+  leave: () => {
+    leave();
+    // No later activity shows the camera, so turn it off now (no-op in Mode A).
+    releaseCamera();
+  },
 };

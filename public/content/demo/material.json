@@ -1,17 +1,43 @@
 {
   "id": "demo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "title": "Demo: Pig and Monkey (placeholder)",
   "characters": [
     {
       "id": "pig",
-      "name": "Pig"
+      "name": "Pig",
+      "filter": {
+        "type": "shapes",
+        "earAnchor": "top",
+        "earColor": "#F7A8B8",
+        "earInnerColor": "#E97F97",
+        "earRadiusX": 0.3,
+        "earRadiusY": 0.4,
+        "noseColor": "#F7A8B8",
+        "noseRadiusX": 0.3,
+        "noseRadiusY": 0.21,
+        "nostrilColor": "#C75B77"
+      }
     },
     {
       "id": "monkey",
-      "name": "Monkey"
+      "name": "Monkey",
+      "filter": {
+        "type": "shapes",
+        "earAnchor": "side",
+        "earColor": "#A9744F",
+        "earInnerColor": "#E8C39E",
+        "earRadiusX": 0.28,
+        "earRadiusY": 0.36,
+        "noseColor": "#6B4226",
+        "noseRadiusX": 0.13,
+        "noseRadiusY": 0.09
+      }
     }
   ],
+  "scene": {
+    "image": "images/scene.svg"
+  },
   "words": [
     {
       "id": "hello",

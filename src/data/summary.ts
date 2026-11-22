@@ -18,6 +18,8 @@ export type ActivitySummary = {
   takes: number;
   roundsRequired: number | null;
   roundsCompleted: number;
+  /** Character chosen in each round of Read and Act, e.g. "r1:pig; r2:monkey". Empty in Mode A. */
+  roles: string;
   supportMarks: number;
   modelMs: number;
   partnerMs: number;
@@ -86,6 +88,10 @@ export function summarizeActivity(events: EventRow[]): ActivitySummary {
     takes: count("take_saved"),
     roundsRequired: typeof required === "number" ? required : null,
     roundsCompleted: count("round_complete"),
+    roles: events
+      .filter((event) => event.type === "role_selected")
+      .map((event) => `r${event.payload.round}:${event.payload.characterId}`)
+      .join("; "),
     supportMarks: count("support_marked"),
     modelMs: time.model,
     partnerMs: time.partner,

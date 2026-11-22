@@ -38,9 +38,10 @@ const README = `Read and Act export
 
 sessions.csv    One row per session: student, material, mode actually used, times, status, settings.
 summary.csv     One row per session and activity, derived from events.csv: durations, playback
-                counts, takes, re-reads, rounds, and time spent on model audio (modelMs), partner
-                audio (partnerMs), waiting before recording (waitMs), recording (recordMs) and hearing
-                their own takes (ownPlaybackMs).
+                counts, takes, re-reads, rounds, and the character chosen in each round (roles).
+                Time is split into model audio (modelMs), partner audio (partnerMs), waiting
+                before recording (waitMs), recording (recordMs) and hearing own takes
+                (ownPlaybackMs).
 recordings.csv  One row per audio file, with the path of the file inside this archive.
 responses.csv   Comprehension and experience answers: first choice, changes, final choice.
 events.csv      The full event log. tMono is a monotonic clock in ms; use it for durations.
@@ -138,7 +139,7 @@ export async function buildExport(sessionIds?: string[]): Promise<ExportResult> 
         session.sessionId, session.studentId, session.mode, session.materialId, activity,
         iso(summary.startedAt), iso(summary.endedAt), summary.durationMs, summary.modelPlays,
         summary.modelReplays, summary.chunkTaps, summary.ownPlaybacks, summary.takes, summary.rereads,
-        summary.roundsRequired, summary.roundsCompleted, summary.supportMarks, summary.modelMs,
+        summary.roundsRequired, summary.roundsCompleted, summary.roles, summary.supportMarks, summary.modelMs,
         summary.partnerMs, summary.waitMs, summary.recordMs, summary.ownPlaybackMs,
       ]);
     }
@@ -147,7 +148,7 @@ export async function buildExport(sessionIds?: string[]): Promise<ExportResult> 
     toCsv(
       ["sessionId", "studentId", "mode", "materialId", "activity", "startedAt", "endedAt", "durationMs",
         "modelPlays", "modelReplays", "chunkTaps", "ownPlaybacks", "takes", "rereads", "roundsRequired",
-        "roundsCompleted", "supportMarks", "modelMs", "partnerMs", "waitMs", "recordMs", "ownPlaybackMs"],
+        "roundsCompleted", "roles", "supportMarks", "modelMs", "partnerMs", "waitMs", "recordMs", "ownPlaybackMs"],
       summaryRows,
     ),
   );

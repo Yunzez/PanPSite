@@ -81,6 +81,27 @@ test("counts replays, re-reads and own playback separately from required work", 
   assert.equal(summary.durationMs, null);
 });
 
+test("reports the chosen character per round and the time spent on partner audio", () => {
+  const summary = summarizeActivity([
+    event(0, "activity_start"),
+    event(500, "role_selected", { round: 1, characterId: "pig" }),
+    event(500, "turn_wait_start"),
+    event(900, "record_start"),
+    event(1900, "record_stop"),
+    event(2000, "partner_play_start", { lineId: "L02" }),
+    event(3500, "partner_play_end"),
+    event(3500, "round_complete", { round: 1, required: 2 }),
+    event(5000, "role_selected", { round: 2, characterId: "monkey" }),
+    event(5000, "partner_play_start", { lineId: "L01" }),
+    event(6200, "partner_play_end"),
+  ]);
+  assert.equal(summary.roles, "r1:pig; r2:monkey");
+  assert.equal(summary.partnerMs, 1500 + 1200);
+  assert.equal(summary.waitMs, 400);
+  assert.equal(summary.recordMs, 1000);
+  assert.equal(summary.roundsRequired, 2);
+});
+
 test("an activity with no rounds reports none required", () => {
   const summary = summarizeActivity([event(0, "activity_start"), event(100, "activity_end")]);
   assert.equal(summary.roundsRequired, null);

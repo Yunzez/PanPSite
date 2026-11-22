@@ -20,10 +20,36 @@ export function tokenize(text: string): string[] {
 const id = z.string().min(1);
 const assetPath = z.string().min(1);
 
+const color = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Expected a colour like #A1B2C3");
+const size = z.number().positive();
+
+/**
+ * How a character's ears and nose are drawn over the student's face.
+ * `shapes` are flat placeholder drawings; a sprite-based type can be added
+ * beside it when real character art is available.
+ */
+const filterSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("shapes"),
+    earAnchor: z.enum(["top", "side"]),
+    earColor: color,
+    earInnerColor: color,
+    /** Sizes are multiples of the distance between the eyes. */
+    earRadiusX: size,
+    earRadiusY: size,
+    noseColor: color,
+    noseRadiusX: size,
+    noseRadiusY: size,
+    nostrilColor: color.optional(),
+  }),
+]);
+
 const characterSchema = z.object({
   id,
   /** Shown in Mode B only. */
   name: z.string().min(1),
+  /** Needed in Mode B for every character that has lines. */
+  filter: filterSchema.optional(),
 });
 
 const wordSchema = z.object({
