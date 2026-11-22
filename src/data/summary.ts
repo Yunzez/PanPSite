@@ -62,7 +62,29 @@ export function summarizeActivity(events: EventRow[]): ActivitySummary {
 
   const time: Record<State, number> = { model: 0, partner: 0, wait: 0, record: 0, own: 0 };
   let open: { state: State; since: number } | null = null;
+  // The activity's duration is added up in stretches of continuous clock.
+  let running = false;
+  let stretchStart = 0;
+  let previous = 0;
+  let duration = 0;
   for (const event of events) {
+    if (event.type === "session_resumed") {
+      // The page was reloaded here, so the monotonic clock started again from
+      // zero. Count each stretch up to its last recorded event; the gap in
+      // between (page closed) is not part of the activity.
+      if (open) time[open.state] += previous - open.since;
+      open = null;
+      if (running) duration += previous - stretchStart;
+      stretchStart = event.tMono;
+    } else if (event.type === "activity_start" && !running) {
+      running = true;
+      stretchStart = event.tMono;
+    } else if (event.type === "activity_end" && running) {
+      duration += event.tMono - stretchStart;
+      running = false;
+    }
+    previous = event.tMono;
+
     const starts = STATE_STARTS[event.type];
     if (!starts && !STATE_ENDS.has(event.type)) continue;
     if (open) time[open.state] += event.tMono - open.since;
@@ -74,7 +96,8 @@ export function summarizeActivity(events: EventRow[]): ActivitySummary {
     startedAt: start?.t ?? null,
     endedAt: end?.t ?? null,
     // Monotonic clock: unaffected by the device's clock being adjusted.
-    durationMs: start && end ? end.tMono - start.tMono : null,
+    // Null while the activity has not ended.
+    durationMs: start && end && !running ? duration : null,
     modelPlays: count("model_play_start"),
     modelReplays: events.filter(
       (event) =>

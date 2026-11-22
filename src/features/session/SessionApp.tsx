@@ -10,6 +10,7 @@ import { ReadingActivity } from "@/features/activities/reading/ReadingActivity";
 import { WordsActivity } from "@/features/activities/words/WordsActivity";
 import { ACTIVITY_ORDER } from "./activity";
 import { Star } from "./ActivityFrame";
+import { ResearcherAccess } from "./ResearcherPanel";
 import { useSessionStore } from "./sessionStore";
 import { SetupScreen } from "./SetupScreen";
 
@@ -76,7 +77,10 @@ export function SessionApp({ mode }: { mode: Mode }) {
     <div className="h-dvh touch-manipulation overflow-hidden select-none">
       {phase === "handover" && <HandoverScreen />}
       {phase === "activity" && <CurrentActivity />}
-      {(phase === "saving" || phase === "saveFailed" || phase === "complete") && <EndScreen />}
+      {(phase === "saving" || phase === "saveFailed" || phase === "complete" || phase === "ended") && (
+        <EndScreen />
+      )}
+      <ResearcherAccess />
       <div className="fixed inset-0 z-50 hidden items-center justify-center bg-background p-8 text-center text-3xl font-bold portrait:flex">
         Please turn the tablet sideways.
       </div>
@@ -112,7 +116,7 @@ function CurrentActivity() {
   }
 }
 
-/** Saving, then either the congratulations or a request to fetch the teacher. */
+/** Saving, then the congratulations, a request to fetch the teacher, or a plain "ended". */
 function EndScreen() {
   const phase = useSessionStore((state) => state.phase);
   const stars = useSessionStore((state) => state.stars);
@@ -135,6 +139,21 @@ function EndScreen() {
         <Button variant="quiet" onClick={() => void retrySave()}>
           Try Again
         </Button>
+      </div>
+    );
+  }
+
+  if (phase === "ended") {
+    // The researcher stopped the session; nothing here is addressed to the student.
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-6 p-8 text-center">
+        <h1 className="text-5xl font-bold">Session ended.</h1>
+        <p className="text-xl text-ink-muted">
+          What was recorded has been saved. Hold the top-right corner to export or add a note.
+        </p>
+        <button type="button" className="text-lg text-ink-muted underline" onClick={reset}>
+          Researcher: start a new session
+        </button>
       </div>
     );
   }

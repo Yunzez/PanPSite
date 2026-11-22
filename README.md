@@ -36,6 +36,8 @@ npm run dev
 
 模式由链接决定，学生无法切换。
 
+研究者在 session 进行中长按屏幕右上角约 1.5 秒，可以打开面板：标记“已提供帮助”、写备注、标记中断、跳过当前活动、提前结束，结束后可以直接导出这一次 session。页面被意外关闭后，在设置页选同一个学生和材料即可继续。
+
 ## 内容
 
 材料放在 `public/content/<id>/`，由 `material.json` 加音频和图片组成，格式见 [src/content/schema.ts](src/content/schema.ts)；`manifest.json` 列出可选的材料，`roster.json` 是学生的匿名编号。加载时会校验，格式有问题会在设置页直接报错。

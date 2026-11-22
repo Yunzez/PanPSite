@@ -3,13 +3,10 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { getDb, type SessionRow } from "@/data/db";
-import { buildExport, markExported, type ExportResult } from "@/data/export";
 import { listSessions } from "@/data/sessions";
 import { estimateStorage, requestPersistentStorage } from "@/data/storage";
+import { ExportStatus, formatBytes, useExport } from "./exporting";
 import { RESEARCHER_PIN } from "./pin";
-
-const formatBytes = (bytes: number) =>
-  bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 const formatTime = (ms: number) =>
   new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -89,9 +86,8 @@ async function loadOverview(): Promise<Overview> {
 
 function Dashboard() {
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [ready, setReady] = useState<{ result: ExportResult; url: string } | null>(null);
+  const exporter = useExport(async () => setOverview(await loadOverview()));
 
   useEffect(() => {
     let cancelled = false;
@@ -108,55 +104,10 @@ function Dashboard() {
     };
   }, []);
 
-  const refresh = async () => setOverview(await loadOverview());
-
-  // The object URL holds the whole ZIP in memory; release it when replaced.
-  useEffect(() => {
-    if (!ready) return;
-    return () => URL.revokeObjectURL(ready.url);
-  }, [ready]);
-
   const sessions = overview?.sessions ?? [];
-  const pending = sessions.filter((session) => session.exportedAt === null && session.status !== "in_progress");
-
-  const prepare = async (sessionIds?: string[]) => {
-    setBusy(true);
-    setError(null);
-    setReady(null);
-    try {
-      const result = await buildExport(sessionIds);
-      setReady({ result, url: URL.createObjectURL(result.blob) });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Called when the researcher takes the file, so "exported" means handed over.
-  const handedOver = async () => {
-    if (!ready) return;
-    await markExported(ready.result.sessionIds);
-    await refresh();
-  };
-
-  const share = async () => {
-    if (!ready) return;
-    const file = new File([ready.result.blob], ready.result.filename, { type: "application/zip" });
-    try {
-      await navigator.share({ files: [file] });
-      await handedOver();
-    } catch {
-      // Share sheet dismissed; nothing was handed over.
-    }
-  };
-
-  const canShare =
-    ready !== null &&
-    typeof navigator.canShare === "function" &&
-    navigator.canShare({
-      files: [new File([], ready.result.filename, { type: "application/zip" })],
-    });
+  // Anything not handed over yet, including sessions that were never finished.
+  const pending = sessions.filter((session) => session.exportedAt === null);
+  const { busy, prepare } = exporter;
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-6">
@@ -205,33 +156,7 @@ function Dashboard() {
         </Button>
       </div>
 
-      {busy && (
-        <p role="status" className="font-bold">
-          Building the ZIP…
-        </p>
-      )}
-
-      {ready && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border-2 border-primary bg-surface p-4">
-          <p className="flex-1 font-bold">
-            {ready.result.filename} · {formatBytes(ready.result.blob.size)} ·{" "}
-            {ready.result.sessionIds.length} session{ready.result.sessionIds.length === 1 ? "" : "s"}
-          </p>
-          <a
-            href={ready.url}
-            download={ready.result.filename}
-            onClick={() => void handedOver()}
-            className="inline-flex min-h-11 items-center rounded-lg border-2 border-b-[5px] border-primary-dark bg-primary px-4 font-bold text-on-primary"
-          >
-            Download ZIP
-          </a>
-          {canShare && (
-            <Button size="sm" variant="secondary" onClick={() => void share()}>
-              Share…
-            </Button>
-          )}
-        </div>
-      )}
+      <ExportStatus exporter={exporter} />
 
       {sessions.length === 0 ? (
         <p className="text-ink-muted">No sessions have been run on this device yet.</p>

@@ -111,18 +111,20 @@ async function playStory(reason: "play" | "listen_again"): Promise<void> {
   if (context !== activity || result !== "ended") return;
   stopFollowing();
   activity.log("model_play_end", { completed: true });
+  activity.saveProgress({ heardOnce: true });
   useListenStore.setState({ status: "ended", lineIndex: -1, wordIndex: -1, heardOnce: true });
 }
 
 export const listenController: ActivityController = {
-  enter: (activityContext) => {
+  enter: (activityContext, resume) => {
     context = activityContext;
     useListenStore.setState({
       lines: activityContext.material.lines,
       status: "idle",
       lineIndex: -1,
       wordIndex: -1,
-      heardOnce: false,
+      // A student who had already heard the story may go straight on.
+      heardOnce: resume?.heardOnce === true,
       canSkip: !activityContext.config.listenRequiresFullPlay,
     });
   },

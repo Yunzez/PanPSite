@@ -59,11 +59,13 @@ export const useWordsStore = create<WordsState>((set, get) => ({
     const { index, words } = get();
     if (index + 1 < words.length) {
       set({ index: index + 1 });
+      context.saveProgress({ index: index + 1 });
       void playModel("auto");
       return;
     }
     set({ stage: "finished", highlight: null });
     context.awardStar("words");
+    context.saveProgress({ finished: true });
   },
 
   finish: () => {
@@ -90,18 +92,28 @@ async function playModel(reason: "auto" | "listen_again"): Promise<void> {
 }
 
 export const wordsController: ActivityController = {
-  enter: (activityContext) => {
+  enter: (activityContext, resume) => {
     context = activityContext;
     const words = activityContext.material.words;
     if (words.length === 0) {
       activityContext.complete();
       return;
     }
-    useWordsStore.setState({ words, index: 0, stage: "model", highlight: null });
+    if (resume?.finished) {
+      // The star was already given; only the final Next is left.
+      useWordsStore.setState({ words, index: words.length - 1, stage: "finished", highlight: null });
+      return;
+    }
+    const index = typeof resume?.index === "number" ? Math.min(resume.index, words.length - 1) : 0;
+    useWordsStore.setState({ words, index, stage: "model", highlight: null });
     void playModel("auto");
   },
   leave: () => {
     context = null;
     audio.stop();
+  },
+  position: () => {
+    const { words, index } = useWordsStore.getState();
+    return { wordId: words[index]?.id };
   },
 };

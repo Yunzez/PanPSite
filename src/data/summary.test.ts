@@ -107,3 +107,28 @@ test("an activity with no rounds reports none required", () => {
   assert.equal(summary.roundsRequired, null);
   assert.equal(summary.roundsCompleted, 0);
 });
+
+test("adds up time on both sides of a page reload, without the gap", () => {
+  const summary = summarizeActivity([
+    event(100_000, "activity_start"),
+    event(100_000, "model_play_start", { reason: "auto" }),
+    event(102_000, "model_play_end"),
+    event(102_000, "turn_wait_start"),
+    event(103_000, "record_start"),
+    // Page closed during this recording; nothing more was logged.
+    // After the reload the monotonic clock starts again near zero.
+    event(4_000, "session_resumed", { round: 1, stepIndex: 0 }),
+    event(4_000, "model_play_start", { reason: "auto" }),
+    event(6_000, "model_play_end"),
+    event(6_000, "turn_wait_start"),
+    event(6_500, "record_start"),
+    event(8_500, "record_stop"),
+    event(9_000, "activity_end", { completed: true }),
+  ]);
+  assert.equal(summary.modelMs, 2000 + 2000);
+  assert.equal(summary.waitMs, 1000 + 500);
+  // The cut-off recording has no known length, so only the finished one counts.
+  assert.equal(summary.recordMs, 2000);
+  // 3 s before the reload (up to the last event) plus 5 s after it.
+  assert.equal(summary.durationMs, 3000 + 5000);
+});

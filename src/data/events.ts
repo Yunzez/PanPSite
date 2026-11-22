@@ -12,11 +12,16 @@ import { getDb, SCHEMA_VERSION, type EventRow } from "./db";
  * are all stored, and is called before a session is marked complete.
  */
 class EventLog {
-  private nextSeq = 0;
+  private nextSeq: number;
   private queue: Promise<void> = Promise.resolve();
   private failed: EventRow[] = [];
 
-  constructor(readonly sessionId: string) {}
+  constructor(
+    readonly sessionId: string,
+    startSeq: number,
+  ) {
+    this.nextSeq = startSeq;
+  }
 
   log(activity: string, type: string, payload: Record<string, unknown> = {}): void {
     const row: EventRow = {
@@ -57,8 +62,12 @@ class EventLog {
 
 let current: EventLog | null = null;
 
-export function startEventLog(sessionId: string): void {
-  current = new EventLog(sessionId);
+/**
+ * Starts logging for a session. `startSeq` is 0 for a new session; when an
+ * interrupted session resumes it is the number after its last stored event.
+ */
+export function startEventLog(sessionId: string, startSeq = 0): void {
+  current = new EventLog(sessionId, startSeq);
 }
 
 export function stopEventLog(): void {

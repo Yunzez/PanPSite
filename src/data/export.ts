@@ -36,7 +36,9 @@ export function audioPath(session: SessionRow, recording: RecordingRow): string 
 
 const README = `Read and Act export
 
-sessions.csv    One row per session: student, material, mode actually used, times, status, settings.
+sessions.csv    One row per session: student, material, mode actually used, times, status, settings,
+                how often the researcher marked support, interruptions, and researcher notes.
+                Status "incomplete" means the session was ended early or abandoned.
 summary.csv     One row per session and activity, derived from events.csv: durations, playback
                 counts, takes, re-reads, rounds, and the character chosen in each round (roles).
                 Time is split into model audio (modelMs), partner audio (partnerMs), waiting
@@ -74,19 +76,24 @@ export async function buildExport(sessionIds?: string[]): Promise<ExportResult> 
   const recordings = await db.recordings.where("sessionId").anyOf(ids).sortBy("startedAt");
   const responses = await db.responses.where("sessionId").anyOf(ids).toArray();
   const student = (sessionId: string) => byId.get(sessionId)?.studentId ?? "";
+  const countOf = (sessionId: string, type: string) =>
+    events.filter((event) => event.sessionId === sessionId && event.type === type).length;
 
   const files: Zippable = { "README.txt": strToU8(README) };
 
   files["sessions.csv"] = strToU8(
     toCsv(
       ["sessionId", "studentId", "mode", "materialId", "materialVersion", "status", "startedAt", "endedAt",
-        "durationMs", "performRounds", "finalFeedback", "micPolicy", "appVersion", "notes", "userAgent"],
+        "durationMs", "performRounds", "finalFeedback", "micPolicy", "supportMarks", "interruptions",
+        "appVersion", "notes", "userAgent"],
       sessions.map((session) => [
         session.sessionId, session.studentId, session.mode, session.materialId, session.materialVersion,
         session.status, iso(session.startedAt), iso(session.endedAt),
         session.endedAt === null ? null : session.endedAt - session.startedAt,
         session.config.performRounds as CsvValue, session.config.finalFeedback as CsvValue,
-        session.config.micPolicy as CsvValue, session.appVersion, session.notes.join(" | "), session.userAgent,
+        session.config.micPolicy as CsvValue, countOf(session.sessionId, "support_marked"),
+        countOf(session.sessionId, "interruption"), session.appVersion, session.notes.join(" | "),
+        session.userAgent,
       ]),
     ),
   );

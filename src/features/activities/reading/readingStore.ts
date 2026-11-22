@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { Line } from "@/content/schema";
 import type { Mode } from "@/data/db";
 import { getTakeBlob, saveTake } from "@/data/recordings";
-import type { ActivityContext, ActivityController } from "@/features/session/activity";
+import type { ActivityContext, ActivityController, ProgressDetail } from "@/features/session/activity";
 import { audio, getRecorder, releaseCamera } from "@/features/session/engines";
 import type { Take } from "@/media/recorder";
 
@@ -118,10 +118,7 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
     set({
       role: pendingRole,
       // The student reads the chosen character's lines; the app reads the rest.
-      steps: lines.map((line, lineIndex) => ({
-        lineIndex,
-        kind: line.characterId === pendingRole ? ("student" as const) : ("partner" as const),
-      })),
+      steps: planSteps(lines, pendingRole),
       stepIndex: 0,
     });
     context.log("role_selected", { round, characterId: pendingRole });
@@ -226,6 +223,7 @@ export const useReadingStore = create<ReadingState>((set, get) => ({
     if (choosesRole(get())) {
       // A new round begins with a new choice; picking the same character is fine.
       set({ phase: "roleSelect", role: null, pendingRole: null, steps: [] });
+      saveProgress(false);
     } else {
       void beginStep();
     }
@@ -241,6 +239,20 @@ function currentLine(): Line {
   return lines[steps[stepIndex].lineIndex];
 }
 
+/** The plan for a round: the student reads `role`'s lines (or every line), the app the rest. */
+function planSteps(lines: Line[], role: string | null): ReadingStep[] {
+  return lines.map((line, lineIndex) => ({
+    lineIndex,
+    kind: role === null || line.characterId === role ? ("student" as const) : ("partner" as const),
+  }));
+}
+
+/** Remembers the round, step and role, so an interrupted session can carry on from here. */
+function saveProgress(roundEnded: boolean): void {
+  const { round, stepIndex, role } = useReadingStore.getState();
+  context?.saveProgress({ round, stepIndex, role, roundEnded });
+}
+
 /** Role choice exists only in Mode B's "Read and Act". */
 function choosesRole(state: Pick<ReadingState, "activity" | "mode">): boolean {
   return state.activity === "perform" && state.mode === "B";
@@ -252,6 +264,7 @@ async function beginStep(): Promise<void> {
   if (!activity) return;
   const { steps, stepIndex, modelFirst } = useReadingStore.getState();
   const line = currentLine();
+  saveProgress(false);
 
   if (steps[stepIndex].kind === "partner") {
     useReadingStore.setState({ phase: "partnerPlaying" });
@@ -347,35 +360,47 @@ async function advance(): Promise<void> {
   // One star per completed round; it marks completion, not accuracy.
   activity.awardStar(`${name}_round_${round}`);
   useReadingStore.setState({ phase: round < rounds ? "roundDone" : "finished" });
+  saveProgress(true);
 }
 
-function enter(activityContext: ActivityContext, activity: ReadingActivity): void {
+function enter(activityContext: ActivityContext, activity: ReadingActivity, resume?: ProgressDetail): void {
   context = activityContext;
   pendingTake = null;
   returnPhase = null;
   const { material, config, mode } = activityContext;
   const withRole = choosesRole({ activity, mode });
+  const rounds = activity === "rehearse" ? 1 : config.performRounds;
+  const roleOptions = material.characters
+    .map((character) => character.id)
+    .filter((characterId) => material.lines.some((line) => line.characterId === characterId));
+
+  // Where to start: the beginning, or where an interrupted session stopped.
+  const round = typeof resume?.round === "number" ? Math.min(Math.max(1, resume.round), rounds) : 1;
+  const role = withRole && typeof resume?.role === "string" && roleOptions.includes(resume.role) ? resume.role : null;
+  const needsRoleChoice = withRole && role === null;
+  const steps = needsRoleChoice ? [] : planSteps(material.lines, withRole ? role : null);
+  const stepIndex =
+    typeof resume?.stepIndex === "number" ? Math.min(Math.max(0, resume.stepIndex), Math.max(0, steps.length - 1)) : 0;
+  const roundEnded = resume?.roundEnded === true && !needsRoleChoice;
+
   useReadingStore.setState({
     activity,
     mode,
     lines: material.lines,
-    // By default the student reads every line. With a role, the plan is built
-    // when the role is confirmed.
-    steps: withRole ? [] : material.lines.map((_, lineIndex) => ({ lineIndex, kind: "student" as const })),
+    steps,
     modelFirst: activity === "rehearse",
-    rounds: activity === "rehearse" ? 1 : config.performRounds,
-    round: 1,
-    stepIndex: 0,
-    phase: withRole ? "roleSelect" : "idle",
-    roleOptions: material.characters
-      .map((character) => character.id)
-      .filter((characterId) => material.lines.some((line) => line.characterId === characterId)),
+    rounds,
+    round,
+    stepIndex,
+    phase: needsRoleChoice ? "roleSelect" : roundEnded ? (round < rounds ? "roundDone" : "finished") : "idle",
+    roleOptions,
     pendingRole: null,
-    role: null,
+    role,
     lastTakeId: null,
     error: null,
   });
-  if (!withRole) void beginStep();
+  if (needsRoleChoice) saveProgress(false);
+  else if (!roundEnded) void beginStep();
 }
 
 function leave(): void {
@@ -393,13 +418,22 @@ function leave(): void {
   useReadingStore.setState({ phase: "idle" });
 }
 
+/** The line the student is on, for researcher marks such as "support provided". */
+function position(): Record<string, unknown> {
+  const { steps, stepIndex, lines, round, role } = useReadingStore.getState();
+  const step = steps[stepIndex];
+  return { lineId: step ? lines[step.lineIndex].id : null, round, role };
+}
+
 export const rehearseController: ActivityController = {
-  enter: (activityContext) => enter(activityContext, "rehearse"),
+  enter: (activityContext, resume) => enter(activityContext, "rehearse", resume),
   leave,
+  position,
 };
 
 export const performController: ActivityController = {
-  enter: (activityContext) => enter(activityContext, "perform"),
+  enter: (activityContext, resume) => enter(activityContext, "perform", resume),
+  position,
   leave: () => {
     leave();
     // No later activity shows the camera, so turn it off now (no-op in Mode A).
