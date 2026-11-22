@@ -57,7 +57,7 @@ export function WordsActivity() {
         <img
           src={word.image}
           alt=""
-          className="aspect-square h-full max-h-80 rounded-lg border-2 border-line object-cover"
+          className="aspect-square h-full max-h-80 rounded-lg border-2 border-line bg-surface object-cover"
         />
         <div className="flex flex-col items-center gap-6">
           {/* The whole word stays visible; its parts are the buttons. */}
