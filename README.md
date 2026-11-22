@@ -42,6 +42,8 @@ npm run dev
 
 材料放在 `public/content/<id>/`，由 `material.json` 加音频和图片组成，格式见 [src/content/schema.ts](src/content/schema.ts)；`manifest.json` 列出可选的材料，`roster.json` 是学生的匿名编号。加载时会校验，格式有问题会在设置页直接报错。
 
+给研究者的材料准备说明（要交哪些文件、怎么命名、填写模板、待确认的问题）：<https://claude.ai/artifact/Hor8vRK7T1cf5pxKXHDDA5>
+
 目前只有一份 `demo` 材料，音频是机器合成的、图片是色块、逐词时间戳是按词长估算的，都只是占位，不是研究材料。`/spike` 页上的音频和滤镜图形同样是占位。
 
 ## 目录
