@@ -84,6 +84,10 @@ export type ResponseRow = SyncFields & {
   firstOptionId: string | null;
   changes: { optionId: string; t: number }[];
   finalOptionId: string | null;
+  /** The final option's wording as shown, so the export does not depend on the content files. */
+  finalOptionLabel: string | null;
+  /** For quiz questions with a known answer; null otherwise. Never shown to the student. */
+  correct: boolean | null;
   status: "answered" | "missing";
 };
 

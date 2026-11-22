@@ -2,6 +2,8 @@ export type PlayResult = "ended" | "stopped";
 
 type ActiveClip = {
   source: AudioBufferSourceNode;
+  /** Audio-clock time at which the clip started (seconds). */
+  startedAt: number;
   finish: (result: PlayResult) => void;
 };
 
@@ -19,6 +21,7 @@ export class AudioEngine {
   private active: ActiveClip | null = null;
   /** Bumped by every `stop()`, so a running sequence can tell it was cancelled. */
   private generation = 0;
+  private paused = false;
 
   private getContext(): AudioContext {
     if (!this.context) this.context = new AudioContext();
@@ -94,9 +97,34 @@ export class AudioEngine {
     return this.startBuffer(buffer);
   }
 
+  /** Freezes playback where it is; `resume()` continues from the same point. */
+  async pause(): Promise<void> {
+    if (!this.context || this.paused) return;
+    this.paused = true;
+    await this.context.suspend();
+  }
+
+  async resume(): Promise<void> {
+    if (!this.context || !this.paused) return;
+    this.paused = false;
+    await this.context.resume();
+  }
+
+  /**
+   * How far into the current clip playback is, in ms (0 when silent). It
+   * follows the audio clock, so it stands still while paused. Word
+   * highlighting reads this every frame.
+   */
+  elapsedMs(): number {
+    if (!this.active || !this.context) return 0;
+    return (this.context.currentTime - this.active.startedAt) * 1000;
+  }
+
   /** Stops the current clip and cancels any running sequence. */
   stop(): void {
     this.generation += 1;
+    // Never leave the engine paused, or the next clip would be silent.
+    if (this.paused) void this.resume();
     const active = this.active;
     if (!active) return;
     active.source.onended = null;
@@ -126,6 +154,7 @@ export class AudioEngine {
     return new Promise<PlayResult>((resolve) => {
       const clip: ActiveClip = {
         source,
+        startedAt: context.currentTime,
         finish: (result) => {
           if (this.active === clip) this.active = null;
           resolve(result);

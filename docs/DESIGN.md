@@ -1,7 +1,8 @@
 # Read and Act — 技术设计文档（初稿）
 
 - 需求来源：[Read and Act: App Design and Training Protocol](https://docs.google.com/document/d/1E5ZqGVcoUTjTp1DgBZCEboNz70He_CuX0GANIp1AMLg)（下文的“需求 §N”指其 App Development 页的章节）
-- 状态：初稿，2026-11-21。标了【假设】的地方是我先替研究者做的默认选择，对应第 13 节的待确认问题。
+- 状态：初稿，2026-11-21。标了【假设】的地方是我先替研究者做的默认选择，对应第 14 节的待确认问题。
+- 进度（2026-11-21）：M0 验证页、M1、M2（Mode A 全流程和导出）已实现。尚未实现：Mode B（`/b`）、研究者的 session 内面板、中断后恢复、设置页的麦克风自检。
 
 ## 1. 产品一句话
 
@@ -69,6 +70,10 @@ setup（研究者） → handover（"Let's read!" + Start） → 6 个活动 →
 - 【假设】`rehearse` 里 Done 之后自动高亮下一句并播放其示范；Read Again 回到刚读完的那一句重录，Hear My Reading 播放最近一次录音。
 - 【假设】`perform`（B）每一轮开始时重新选角色，可以和上一轮相同。
 - 【假设】`quiz` 作答后不显示对错。
+- 【假设】`words` 里只有一个 Listen again 按钮，重播当前词的整段示范；需求里的 Play Model 和 Listen Again 合并成了这一个。示范完整播过一遍后才能点 Next。
+- 【假设】Mode A 不显示角色名；`perform` 朗读全部台词。
+
+实现方式：活动由 session 流程启动和结束（每个活动导出一个 `enter` / `leave` 控制器），不依赖组件挂载，所以声音和录音在每个活动里只会启动一次。`rehearse` 和 `perform` 共用一个朗读循环，区别只在“步骤计划”（每一步是学生读还是同伴读）和是否先播示范；Mode B 的角色扮演只需要换一份计划。`quiz` 和 `feedback` 共用一个“一屏一题”的状态机。
 
 ## 5. 内容模型
 
@@ -149,7 +154,7 @@ IndexedDB 是浏览器内置的本地数据库：按 key 存 JS 对象，可以�
 | `events` | `sessionId`、`seq`、`t`（时间戳）、`tMono`（单调时钟）、`activity`、`type`、`payload` |
 | `recordings` | `recordingId`、`sessionId`、`activity`、`round`、`lineId`、`characterId`、`take`、`startedAt`、`durationMs`、`mimeType`、`sizeBytes` |
 | `recordingBlobs` | `recordingId`、`blob`（音频本体，和元数据分开存） |
-| `responses` | `sessionId`、`kind`（quiz / feedback / finalFeedback）、`questionId`、`questionVersion`、`firstOptionId`、`changes[]`、`finalOptionId`、`status`（已答 / 缺失） |
+| `responses` | `sessionId`、`kind`（quiz / feedback / finalFeedback）、`questionId`、`questionVersion`、`firstOptionId`、`changes[]`、`finalOptionId`、`finalOptionLabel`、`correct`（仅理解题，只用于导出）、`status`（已答 / 缺失） |
 
 ### 事件日志
 只追加。需求 §10 要的各种计数和时长都不单独维护，导出时从事件算出来：
@@ -204,7 +209,7 @@ export_<日期>/
   - 写备注、标记中断
   - 跳到下一个活动（当前活动记为未完成）、结束 session
   - 完成后：导出本次 session
-- `/researcher`：PIN 只为挡住学生，不是安全措施。session 列表、批量导出、轮数等设置、名单维护。历史记录不随新 session 改动。
+- `/researcher`：PIN 只为挡住学生，不是安全措施；默认值在 `src/features/researcher/pin.ts`，部署时用环境变量 `NEXT_PUBLIC_RESEARCHER_PIN` 覆盖。导出分两步：先生成 ZIP，再由研究者点下载或分享，点了才记为已导出。session 列表、批量导出、轮数等设置、名单维护。历史记录不随新 session 改动。
 
 ## 9. Theme
 
